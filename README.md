@@ -1,4 +1,11 @@
 # _Immu-multi-device_
+
+<p align="center">
+  <a href="https://github.com/immumdbot/IMMU-MD">
+    <img alt="IMMU-MD docs" height="350" src="https://i.ibb.co/XM2ZzFY/IMG-20250622-WA0006.jpg">
+  </a>
+</p>
+
 ## _Multi device whatsapp bot created with [Baileys](https://github.com/whiskeysockets/Baileys)_
   
 <div align="center">
