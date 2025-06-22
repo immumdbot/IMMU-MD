@@ -10,7 +10,7 @@
   
 <div align="center">
    
-<a href="https://immu-session.onrender.com"><img align="center" src="https://i.imgur.com/dzPTA6u.png" alt="Scan QR" height="112" width="300" /></a><br>
+<a href="https://immu-pair-465bb919d8de.herokuapp.com/"><img align="center" src="https://i.imgur.com/dzPTA6u.png" alt="Scan QR" height="112" width="300" /></a><br>
 
 </div>
 
