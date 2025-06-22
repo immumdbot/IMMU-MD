@@ -1,0 +1,962 @@
+require('./settings.js') 
+const makeWASocket = require("@whiskeysockets/baileys").default;
+const { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, Browsers, delay, generateWAMessageFromContent, generateForwardMessageContent, getContentType, normalizeMessageContent, jidDecode, downloadContentFromMessage } = require("@whiskeysockets/baileys");
+const { makeInMemoryStore } = require('@rodrigogs/baileys-store')
+const performance = require('perf_hooks').performance;
+const pino = require("pino");
+const fs = require("fs-extra");
+const path = require("path")
+const chalk = require('chalk');
+const FileType = require('file-type')
+const NodeCache = require("node-cache");
+const { heart } = require('./Assets/serialize.js')
+const { setHerokuEnvVar, getHerokuEnvVars, deleteHerokuEnvVar } = require('./Assets/functions.js') 
+const moment = require("moment-timezone")
+const readline = require("readline");
+
+let phoneNumber = "254754783972"
+
+const question = (text) => {
+const rl = readline.createInterface({
+input: process.stdin,
+output: process.stdout
+});
+return new Promise((resolve) => {
+rl.question(text, resolve)
+})
+};
+
+const color = (text, color) => {
+    return !color ? chalk.green(text) : chalk.keyword(color)(text)
+}
+
+const store = makeInMemoryStore({ logger: pino().child({ level: "silent", stream: "store" }) }); 
+
+const sessionDir = path.join(__dirname, 'Session');
+const credsPath = path.join(sessionDir, 'creds.json');
+
+async function downloadSessionData() {
+  try {
+
+    await fs.promises.mkdir(sessionDir, { recursive: true });
+
+    if (!fs.existsSync(credsPath)) {
+      if (!global.SESSION_ID) {
+        return console.log(color(`Session id not found at SESSION_ID!\n\nWait to enter your number`, 'red'));
+      }
+
+      const base64Data = global.SESSION_ID.split("IMMU-MD:~")[1];
+      
+      const sessionData = Buffer.from(base64Data, 'base64');
+      
+        await fs.promises.writeFile(credsPath, sessionData);
+      console.log(color(`Session successfully saved, please wait!!`, 'green'));
+      await startBot();
+    }
+  } catch (error) {
+    console.error('Error downloading session data:', error);
+  }
+}
+
+const startBot = async () => {
+    const { version } = await fetchLatestBaileysVersion();
+    const { state, saveCreds } = await useMultiFileAuthState("./Session");
+    const bot = makeWASocket({
+        logger: pino({ level: 'fatal' }),
+        printQRInTerminal: false,
+        version,
+        browser: Browsers.ubuntu('Edge'),
+        auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })) },
+        syncFullHistory: true
+    });
+
+store.bind(bot.ev)
+
+if(!bot.authState.creds.registered) {
+
+        let phoneNumber;
+       phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Enter your phone number to connect to IMMU MD\nExample 92xxxxxxxxx:- `)))
+        phoneNumber = phoneNumber.trim();
+
+        setTimeout(async () => {
+            const code = await bot.requestPairingCode(phoneNumber);
+      console.log(chalk.black(chalk.bgWhite(`PAIR CODE:- ${code}`)));
+        }, 3000);
+    }
+
+bot.ev.on('connection.update', async (update) => {
+   const { connection, lastDisconnect } = update;
+        try {
+            if (connection === "close" && lastDisconnect) {
+                let statusCode = lastDisconnect?.error?.output?.statusCode || 0;
+
+                if ([
+                    DisconnectReason.badSession, 
+                    DisconnectReason.loggedOut, 
+                    DisconnectReason.connectionClosed, 
+                    DisconnectReason.connectionLost, 
+                    DisconnectReason.connectionReplaced, 
+                    DisconnectReason.restartRequired, 
+                    DisconnectReason.timedOut
+                ].includes(statusCode)) {
+                    console.log("Reconnecting...");
+                    startBot();
+                }
+            }
+
+            if (connection === "open") {
+   console.log(chalk.green(`[ IMMU MD ] Connected Successfully!`));
+
+try {
+    await bot.groupAcceptInvite("Dwz8401wDb58m3ZCxG2q54");
+} catch (err) {
+    console.log(`Failed to join the group: ${err.message || err}`);
+    if (err.status === 409 || err.status === 403 || err.status === 410) {
+        console.log("Bot cannot join the group. Continuing...");
+    } else {
+    }
+} 
+ 
+   bot.sendMessage(bot.user.id, { text: `✅ IMMU MD CONNECTED SUCCESSFULLY` })        
+            }
+        } catch (err) {
+            console.log('Error in Connection.update:', err.message);
+            startBot();
+        }
+    });
+
+    bot.ev.on("creds.update", saveCreds);
+    
+ bot.ev.on("messages.upsert", async (chatUpdate) => {
+     try {
+  const messages = chatUpdate.messages;
+ 
+     for (const kay of messages) {
+      if (!kay.message) continue;
+
+      kay.message = normalizeMessageContent(kay.message);
+
+      const messageId = kay.key.id;
+      const remoteJid = kay.key.remoteJid;
+      const m = heart(bot, kay, store); 
+      
+const body = m.body;
+const botNumber = await bot.decodeJid(bot.user.id);
+const devTylor = '254754783972';
+const prefix = global.PREFIX;
+const isCmd = body.startsWith(prefix);
+const trimmedBody = isCmd ? body.slice(prefix.length).trimStart() : "";
+
+//command
+const command = isCmd && trimmedBody ? trimmedBody.split(/\s+/).shift().toLowerCase() : "";
+const args = trimmedBody.split(/\s+/).slice(1);
+const isCreator = [botNumber, devTylor, global.ownernumber]
+      .map((v) => v.replace(/[^0-9]/g, "") + "@s.whatsapp.net")
+      .includes(m.sender);
+
+if (global.mode === 'private') {
+  if (command && !isCreator && !m.key.fromMe) return;
+}
+const modeStatus = global.mode === 'public' ? "Public" : "Private";
+const reply = async(text) => {
+m.reply(text);
+}
+const storeFile = "./Assets/store.json";
+const maxMessageAge = 24 * 60 * 60; //24 hours
+
+function loadStoredMessages() {
+    if (fs.existsSync(storeFile)) {
+        try {
+            return JSON.parse(fs.readFileSync(storeFile));
+        } catch (err) {
+            console.error("⚠️ Error loading store.json:", err);
+            return {};
+        }
+    }
+    return {};
+}
+
+function saveStoredMessages(chatId, messageId, messageData) {
+    let storedMessages = loadStoredMessages();
+
+    if (!storedMessages[chatId]) storedMessages[chatId] = {};
+    if (!storedMessages[chatId][messageId]) {
+        storedMessages[chatId][messageId] = messageData;
+        fs.writeFileSync(storeFile, JSON.stringify(storedMessages, null, 2));
+    }
+} 
+
+function cleanupOldMessages() {
+    let now = Math.floor(Date.now() / 1000);
+    let storedMessages = {};
+
+    if (fs.existsSync(storeFile)) {
+        try {
+            storedMessages = JSON.parse(fs.readFileSync(storeFile));
+        } catch (err) {
+            console.error("❌ Error reading store.json:", err);
+            return;
+        }
+    }
+
+    let totalMessages = 0, oldMessages = 0, keptMessages = 0;
+
+    for (let chatId in storedMessages) {
+        let messages = storedMessages[chatId];
+
+        for (let messageId in messages) {
+            let messageTimestamp = messages[messageId].timestamp;
+
+            if (typeof messageTimestamp === "object" && messageTimestamp.low !== undefined) {
+                messageTimestamp = messageTimestamp.low;
+            }
+
+            if (messageTimestamp > 1e12) {
+                messageTimestamp = Math.floor(messageTimestamp / 1000);
+            }
+
+            totalMessages++;
+
+            if (now - messageTimestamp > maxMessageAge) {
+                delete storedMessages[chatId][messageId];
+                oldMessages++;
+            } else {
+                keptMessages++;
+            }
+        }
+        
+        if (Object.keys(storedMessages[chatId]).length === 0) {
+            delete storedMessages[chatId];
+        }
+    }
+
+    fs.writeFileSync(storeFile, JSON.stringify(storedMessages, null, 2));
+
+}
+
+function loadStoredMessages() {
+    if (fs.existsSync(storeFile)) {
+        return JSON.parse(fs.readFileSync(storeFile));
+    }
+    return {};
+}
+
+
+        // Commands
+   if (isCmd) {
+     switch (command) {
+   
+  case "autostatusview":
+  {
+        if (!isCreator) return reply("Only bot owner can use this command⚠️");
+        if (!text) return reply('*Please specify on/off*\n\nExample: .autostatusview on');
+
+        const autoStatusViewValue = text.trim().toLowerCase();
+        if (autoStatusViewValue !== "on" && autoStatusViewValue !== "off") {
+            return reply('*Invalid value. Please specify on or off*');
+        }
+
+        try {
+            const varValue = autoStatusViewValue === "on" ? "true" : "false";
+            await setHerokuEnvVar("AUTO_STATUS_VIEW", varValue);
+            await reply(`*Auto-Status View setting updated successfully*\n\`\`\`AUTO_STATUS_VIEW = ${varValue.toUpperCase()}\`\`\``);
+            await reply(`*Bot will restart to apply the new setting. Please wait a moment!*`);
+        } catch (error) {
+            await reply(`*Error updating Auto-Status View setting*\n${error.message}`);
+        }
+ } break;
+ 
+  case "autostatusreact":
+  {
+        if (!isCreator) return reply("Only bot owner can use this command⚠️");
+        if (!text) return reply('*Please specify on/off*\n\nExample: .autostatusreact on');
+
+        const autoStatusReactValue = text.trim().toLowerCase();
+        if (autoStatusReactValue !== "on" && autoStatusReactValue !== "off") {
+            return reply('*Invalid value. Please specify on or off*');
+        }
+
+        try {
+            const varValue = autoStatusReactValue === "on" ? "true" : "false";
+            await setHerokuEnvVar("AUTO_STATUS_REACT", varValue);
+            await reply(`*Auto-Status React setting updated successfully*\n\`\`\`AUTO_STATUS_REACT = ${varValue.toUpperCase()}\`\`\``);
+            await reply(`*Bot will restart to apply the new setting. Please wait a moment!*`);
+        } catch (error) {
+            await reply(`*Error updating Auto-Status React setting*\n${error.message}`);
+        }
+  } break;
+  
+  case "antidelete":
+  {
+    if (!isCreator) return reply("Only bot owner can use this command⚠️");
+    if (!text) return reply('*Please specify the antidelete mode*\n\nExample: .antidelete private');
+
+    const modeValue = text.trim().toLowerCase();
+    const validModes = ['private', 'chat', 'off'];
+
+    if (!validModes.includes(modeValue)) {
+      return reply('*Invalid value. Please specify private, chat, or off*');
+    }
+
+    try {
+      await setHerokuEnvVar("ANTIDELETE", modeValue);
+      await reply(`*Antidelete mode updated successfully*\n\`\`\`ANTIDELETE = ${modeValue.toUpperCase()}\`\`\``);
+      await reply(`*Bot will restart to apply the new setting. Please wait a moment!*`);
+    } catch (error) {
+      await reply(`*Error updating antidelete mode*\n${error.message}`);
+    }
+ } break;
+ 
+ case "setprefix":
+ {
+        if (!isCreator) return reply("Only bot owner can use this command⚠️");
+        if (!text) return reply('*Please specify the prefix*\n\nExample: .setprefix !');
+
+        const prefixValue = text.trim();
+        try {
+            await setHerokuEnvVar("PREFIXZ", prefixValue);
+            await reply(`*Prefix updated successfully*\n\`\`\`PREFIXZ = ${prefixValue}\`\`\``);
+            await reply(`*Bot will restart to apply the new setting. Please wait a moment!*`);
+        } catch (error) {
+            await reply(`*Error updating prefix*\n${error.message}`);
+        }
+  } break;
+  
+  case "mode":
+  {
+        if (!isCreator) return reply("Only bot owner can use this command⚠️");
+        if (!text) return reply('*Please specify the mode*\n\nExample: .mode private');
+
+        const modeValue = text.trim().toLowerCase();
+        if (modeValue !== "private" && modeValue !== "public") {
+            return reply('*Invalid value. Please specify private or public*');
+        }
+
+        try {
+            await setHerokuEnvVar("MODE", modeValue);
+            await reply(`*Mode updated successfully*\n\`\`\`MODE = ${modeValue.toUpperCase()}\`\`\``);
+            await reply(`*Bot will restart to apply the new setting. Please wait a moment!*`);
+        } catch (error) {
+            await reply(`*Error updating mode*\n${error.message}`);
+    }
+ } break;
+ 
+ case "ping":
+ {
+    const startTime = performance.now();
+
+    try {
+      const sentMessage = await bot.sendMessage(m.chat, {
+        text: "Pinging!",
+        contextInfo: { quotedMessage: m.message }
+      });
+      
+      const endTime = performance.now();
+      const latency = endTime - startTime;
+      const finalStatus = `> ((( • )))
+⚡ *Bot speed: ${latency.toFixed(2)} ms*`;
+      await bot.sendMessage(m.chat, {
+        text: finalStatus,
+        edit: sentMessage.key, 
+        contextInfo: { quotedMessage: m.message }
+      });
+
+    } catch (error) {
+      console.error('Error sending ping message:', error);
+      await bot.sendMessage(m.chat, {
+        text: 'An error occurred while trying to ping.',
+        contextInfo: { quotedMessage: m.message }
+      });
+    }
+  } break;
+  case "vv":
+  {
+    if (!isCreator) return reply("Only bot owner can use this command⚠️");
+    if (!m.quoted) return reply('*Please reply to a view once message!*');
+
+    let msg = m.msg?.contextInfo?.quotedMessage;
+    let type = Object.keys(msg)[0];
+
+    if (type === 'viewOnceMessageV2') {
+      const innerMsg = msg[type]?.message;
+      if (!innerMsg) return reply('*Unsupported view-once message format.*');
+
+      type = Object.keys(innerMsg)[0];
+      msg = innerMsg;
+    }
+
+    if (!/imageMessage|videoMessage|audioMessage/.test(type)) {
+      return reply('*Only view once images, videos, and audio messages are supported!*');
+    }
+
+    try {
+      let media;
+      let filename;
+      let caption = msg[type]?.caption || "";
+
+      if (type === 'imageMessage') {
+        media = await downloadContentFromMessage(msg[type], 'image');
+        filename = 'media.jpg';
+      } else if (type === 'videoMessage') {
+        media = await downloadContentFromMessage(msg[type], 'video');
+        filename = 'media.mp4';
+      } else if (type === 'audioMessage') {
+        media = await downloadContentFromMessage(msg[type], 'audio');
+        filename = 'audio.mp3';
+      }
+
+      let bufferArray = [];
+      for await (const chunk of media) {
+        bufferArray.push(chunk);
+      }
+      let buffer = Buffer.concat(bufferArray);
+
+      if (type === 'audioMessage') {
+        await bot.sendMessage(
+          bot.user.id,
+          { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: true },
+          { quoted: m }
+        );
+      } else {
+        await bot.sendFile(bot.user.id, buffer, filename, caption, m);
+      }
+
+    } catch (error) {
+      console.error(error);
+      reply('*Failed to retrieve media. The message might not be a valid view-once media.*');
+    }
+  } break;
+  
+  case "menu" :
+  {
+  const menutext = `┌──────────────
+├─ *IMMU MD*
+└──────────────
+
+1. autostatusreact
+
+2. autostatusview
+
+3. antidelete
+
+4. mode
+
+5. vv
+
+6. ping
+
+7. setprefix
+
+┌──────────────
+├─ *OWNER : IMAD ALI*
+└──────────────
+┌──────────────
+├─ *SUPPORT CHANNEL*
+└──────────────
+
+https://whatsapp.com/channel/0029Vaq4PRsD38CJKXzwmb42`
+  
+      bot.sendMessage(m.chat, {
+            image: { url: 'https://i.ibb.co/XM2ZzFY/IMG-20250622-WA0006.jpg' }, 
+            caption: menutext,
+        }, { quoted: m });
+  } break;
+    }
+ }
+
+        // Auto Status View
+        if (global.autoviewstatus === 'true' && m.key.remoteJid === "status@broadcast" && !m.key.fromMe) {
+            const participant = m.key.participant || m.participant;
+                await bot.readMessages([m.key]);
+                console.log(`👀 Viewed status from: ${participant.split('@')[0]}`);
+        }
+
+        // Status Reaction
+        if (global.autoreactstatus === 'true' && m.key.remoteJid === "status@broadcast" && !m.key.fromMe) {
+      const emojiSetting = global.statusemoji || '💚';
+  const emojiArray = emojiSetting.split(',').map(e => e.trim()).filter(e => e);
+     const reactionEmoji = emojiArray[Math.floor(Math.random() * emojiArray.length)];  
+        
+            const participant = m.key.participant || m.participant;
+            const botJid = bot.user.id;
+
+            if (!participant) return;
+
+            try {
+                await bot.sendMessage(
+                    'status@broadcast',
+                    { react: { key: { id: m.key.id, remoteJid: m.key.remoteJid, participant }, text: reactionEmoji } },
+                    { statusJidList: [participant, botJid] }
+                );
+   console.log(`✅ Reacted to status of ${participant.split('@')[0]} with ${reactionEmoji}`);
+            } catch (error) {
+                console.error(`❌ Failed to send reaction:`, error);
+            }
+        }
+
+
+if (
+    global.antidelete === 'private' &&
+    m.message?.protocolMessage?.type === 0 && 
+    m.message?.protocolMessage?.key
+) {
+    try {
+        let messageId = m.message.protocolMessage.key.id;
+        let chatId = m.chat;
+        let deletedBy = m.sender;
+
+        let storedMessages = loadStoredMessages();
+        let deletedMsg = storedMessages[chatId]?.[messageId];
+
+        if (!deletedMsg) {
+            console.log("⚠️ Deleted message not found in database.");
+            return;
+        }
+
+        let sender = deletedMsg.key.participant || deletedMsg.key.remoteJid;
+
+let chatName;
+if (deletedMsg.key.remoteJid === 'status@broadcast') {
+    chatName = "Status Update";
+} else if (m.isGroup) {
+    try {
+        const groupInfo = await bot.groupMetadata(m.chat);
+        chatName = groupInfo.subject || "Group Chat";
+    } catch {
+        chatName = "Group Chat";
+    }
+} else {
+    chatName = deletedMsg.pushName || m.pushName || "Private Chat";
+}
+
+        let xtipes = moment(deletedMsg.messageTimestamp * 1000).tz(`${timezones}`).locale('en').format('HH:mm z');
+        let xdptes = moment(deletedMsg.messageTimestamp * 1000).tz(`${timezones}`).format("DD/MM/YYYY");
+
+        if (!deletedMsg.message.conversation && !deletedMsg.message.extendedTextMessage) {
+            try {
+                let forwardedMsg = await bot.sendMessage(
+                    bot.user.id,
+                    { 
+                        forward: deletedMsg,
+                        contextInfo: { isForwarded: false }
+                    },
+                    { quoted: deletedMsg }
+                );
+                
+                let mediaInfo = `*IMMU MD ANTIDELETE!*
+  
+*Chat:* ${chatName}
+*Sent By:* @${sender.split('@')[0]} 
+𝚃𝙸𝙼𝙴: ${xtipes}
+𝙳𝙰𝚃𝙴: ${xdptes}
+*Deleted by:* @${deletedBy.split('@')[0]}`;
+
+                await bot.sendMessage(
+                    bot.user.id, 
+                    { text: mediaInfo, mentions: [sender, deletedBy] },
+                    { quoted: forwardedMsg }
+                );
+                
+            } catch (mediaErr) {
+                console.error("Media recovery failed:", mediaErr);
+                let replyText = `*IMMU MD ANTIDELETE!*
+  
+*Chat:* ${chatName}
+*Sent By:* @${sender.split('@')[0]} 
+*Time Sent:* ${xtipes}
+*Date Sent:* ${xdptes}
+*Deleted by:* @${deletedBy.split('@')[0]}
+
+*Deleted Message:* [Unsupported media content]`;
+
+                let quotedMessage = {
+                    key: {
+                        remoteJid: chatId,
+                        fromMe: sender === bot.user.id,
+                        id: messageId,
+                        participant: sender
+                    },
+                    message: { conversation: "Media recovery failed" }
+                };
+
+                await bot.sendMessage(
+                    bot.user.id,
+                    { text: replyText, mentions: [sender, deletedBy] },
+                    { quoted: quotedMessage }
+                );
+            }
+        } 
+        else {
+            let text = deletedMsg.message.conversation || 
+                      deletedMsg.message.extendedTextMessage?.text;
+
+            let replyText = `*IMMU MD ANTIDELETE!*
+  
+*Chat:* ${chatName}
+*Sent By:* @${sender.split('@')[0]} 
+*Time Sent:* ${xtipes}
+*Date Sent:* ${xdptes}
+*Deleted by:* @${deletedBy.split('@')[0]}
+
+*Deleted Message:* ${text}`;
+
+            let quotedMessage = {
+                key: {
+                    remoteJid: chatId,
+                    fromMe: sender === bot.user.id,
+                    id: messageId,
+                    participant: sender
+                },
+                message: {
+                    conversation: text 
+                }
+            };
+
+            await bot.sendMessage(
+                bot.user.id,
+                { text: replyText, mentions: [sender, deletedBy] },
+                { quoted: quotedMessage }
+            );
+        }
+
+    } catch (err) {
+        console.error("❌ Error processing deleted message:", err);
+    }
+} else if (
+    m.sender !== botNumber &&
+    global.antidelete === 'chat' &&
+    m.message?.protocolMessage?.type === 0 && 
+    m.message?.protocolMessage?.key
+) {
+    try {
+        let messageId = m.message.protocolMessage.key.id;
+        let chatId = m.chat;
+        let deletedBy = m.sender;
+
+        let storedMessages = loadStoredMessages();
+        let deletedMsg = storedMessages[chatId]?.[messageId];
+
+        if (!deletedMsg) {
+            console.log("⚠️ Deleted message not found in database.");
+            return;
+        }
+
+        let sender = deletedMsg.key.participant || deletedMsg.key.remoteJid;
+
+     let chatName;
+if (deletedMsg.key.remoteJid === 'status@broadcast') {
+    chatName = "Status Update";
+} else if (m.isGroup) {
+    try {
+        const groupInfo = await bot.groupMetadata(m.chat);
+        chatName = groupInfo.subject || "Group Chat";
+    } catch {
+        chatName = "Group Chat";
+    }
+} else {
+    chatName = deletedMsg.pushName || m.pushName || "Private Chat";
+}
+
+        let xtipes = moment(deletedMsg.messageTimestamp * 1000).tz(`${timezones}`).locale('en').format('HH:mm z');
+        let xdptes = moment(deletedMsg.messageTimestamp * 1000).tz(`${timezones}`).format("DD/MM/YYYY");
+
+        if (!deletedMsg.message.conversation && !deletedMsg.message.extendedTextMessage) {
+            try {
+                let forwardedMsg = await bot.sendMessage(
+                    m.chat,
+                    { 
+                        forward: deletedMsg,
+                        contextInfo: { isForwarded: false }
+                    },
+                    { quoted: deletedMsg }
+                );
+                
+                let mediaInfo = `*IMMU MD ANTIDELETE!*
+  
+*Chat:* ${chatName}
+*Sent By:* @${sender.split('@')[0]} 
+Time: ${xtipes}
+Date: ${xdptes}
+*Deleted by:* @${deletedBy.split('@')[0]}`;
+
+                await bot.sendMessage(
+                    m.chat, 
+                    { text: mediaInfo, mentions: [sender, deletedBy] },
+                    { quoted: forwardedMsg }
+                );
+                
+            } catch (mediaErr) {
+                console.error("Media recovery failed:", mediaErr);
+                let replyText = `*IMMU MD ANTIDELETE!*
+  
+*Chat:* ${chatName}
+*Sent By:* @${sender.split('@')[0]} 
+*Time Sent:* ${xtipes}
+*Date Sent:* ${xdptes}
+*Deleted by:* @${deletedBy.split('@')[0]}
+
+*Deleted Message:* [Unsupported media content]`;
+
+                let quotedMessage = {
+                    key: {
+                        remoteJid: chatId,
+                        fromMe: sender === bot.user.id,
+                        id: messageId,
+                        participant: sender
+                    },
+                    message: { conversation: "Media recovery failed" }
+                };
+
+                await bot.sendMessage(
+                    m.chat,
+                    { text: replyText, mentions: [sender, deletedBy] },
+                    { quoted: quotedMessage }
+                );
+            }
+        } 
+        else {
+            let text = deletedMsg.message.conversation || 
+                      deletedMsg.message.extendedTextMessage?.text;
+
+            let replyText = `*IMMU MD ANTIDELETE!*
+  
+*Chat:* ${chatName}
+*Sent By:* @${sender.split('@')[0]} 
+*Time Sent:* ${xtipes}
+*Date Sent:* ${xdptes}
+*Deleted by:* @${deletedBy.split('@')[0]}
+
+*Deleted Message:* ${text}`;
+
+            let quotedMessage = {
+                key: {
+                    remoteJid: chatId,
+                    fromMe: sender === bot.user.id,
+                    id: messageId,
+                    participant: sender
+                },
+                message: {
+                    conversation: text 
+                }
+            };
+
+            await bot.sendMessage(
+                m.chat,
+                { text: replyText, mentions: [sender, deletedBy] },
+                { quoted: quotedMessage }
+            );
+        }
+
+    } catch (err) {
+        console.error("❌ Error processing deleted message:", err);
+    }
+}
+
+
+saveStoredMessages(remoteJid, messageId, kay);
+
+        // Status Saver (Auto)
+        if (global.autosavestatus === 'true' && m.key.remoteJid === "status@broadcast" && !m.key.fromMe) {
+            try {
+                await m.copyNForward(bot.user.id, true);
+                console.log(`📥 Auto-saved status from: ${m.key.participant.split('@')[0]}`);
+            } catch (err) {
+                console.error(`❌ Failed to auto-save status:`, err);
+            }
+        }
+    }
+  } catch (err) {
+     console.log(err);
+  }
+}); 
+
+    bot.copyNForward = async (jid, message, forceForward = false, options = {}) => {
+    if (!message || !message.message) return console.error("No message to forward!");
+
+    let vtype;
+    if (options.readViewOnce && message.message.viewOnceMessage) {
+        message.message = message.message.viewOnceMessage.message;
+        vtype = Object.keys(message.message)[0];
+        delete message.message?.ignore;
+        delete message.message[vtype].viewOnce;
+    }
+
+    let content = await generateForwardMessageContent(message, forceForward);
+    let ctype = Object.keys(content)[0];
+    let context = message.message?.[ctype]?.contextInfo || {};
+
+    content[ctype].contextInfo = { ...context, ...content[ctype].contextInfo };
+
+    const waMessage = await generateWAMessageFromContent(jid, content, {
+        ...content[ctype],
+        ...options,
+        ...(options.contextInfo ? { contextInfo: { ...content[ctype].contextInfo, ...options.contextInfo } } : {}),
+    });
+
+    await bot.relayMessage(jid, waMessage.message, { messageId: waMessage.key.id });
+    return waMessage;
+ };
+ 
+ bot.downloadAndSaveMediaMessage = async (message, filename, attachExtension = true) => {
+    let quoted = message.msg ? message.msg : message;
+    let mime = (message.msg || message).mimetype || '';
+    let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0];
+
+    const stream = await downloadContentFromMessage(quoted, messageType);
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+
+    let type = await FileType.fromBuffer(buffer);
+    let trueFileName = attachExtension ? (filename + '.' + type.ext) : filename;
+    let savePath = path.join(__dirname, 'tmp', trueFileName); // Save to 'tmp' folder
+
+    await fs.writeFileSync(savePath, buffer);
+
+    buffer = null; 
+    global.gc?.(); 
+
+    return savePath;
+};
+
+bot.decodeJid = (jid) => {
+if (!jid) return jid;
+if (/:\d+@/gi.test(jid)) {
+let decode = jidDecode(jid) || {};
+return (decode.user && decode.server && decode.user + "@" + decode.server) || jid;
+} else return jid;
+};
+
+bot.sendText = (jid, text, quoted = '', options) => bot.sendMessage(jid, { text: text, ...options }, { quoted })
+
+bot.sendTextWithMentions = async (jid, text, quoted, options = {}) => bot.sendMessage(jid, { text: text, contextInfo: { mentionedJid: [...text.matchAll(/@(\d{0,16})/g)].map(v => v[1] + '@s.whatsapp.net') }, ...options }, { quoted })
+
+bot.getFile = async (PATH, returnAsFilename) => {
+    let res, filename;
+    const data = Buffer.isBuffer(PATH) 
+        ? PATH 
+        : /^data:.*?\/.*?;base64,/i.test(PATH) 
+        ? Buffer.from(PATH.split`, `[1], 'base64') 
+        : /^https?:\/\//.test(PATH) 
+        ? await (res = await fetch(PATH)).buffer() 
+        : fs.existsSync(PATH) 
+        ? (filename = PATH, fs.readFileSync(PATH)) 
+        : typeof PATH === 'string' 
+        ? PATH 
+        : Buffer.alloc(0);
+
+    if (!Buffer.isBuffer(data)) throw new TypeError('Result is not a buffer');
+    
+    const type = await FileType.fromBuffer(data) || { mime: 'application/octet-stream', ext: '.bin' };
+    
+    if (returnAsFilename && !filename) {
+        filename = path.join(__dirname, './tmp/' + new Date() * 1 + '.' + type.ext);
+        await fs.promises.writeFile(filename, data);
+    }
+    
+    const deleteFile = async () => {
+        if (filename && fs.existsSync(filename)) {
+            await fs.promises.unlink(filename).catch(() => {}); 
+        }
+    };
+
+    setImmediate(deleteFile);
+    data.fill(0); 
+    
+    return { res, filename, ...type, data, deleteFile };
+};
+
+bot.sendFile = async (jid, path, filename = '', caption = '', quoted, ptt = false, options = {}) => {
+  let type = await bot.getFile(path, true);
+  let { res, data: file, filename: pathFile } = type;
+
+  if (res && res.status !== 200 || file.length <= 65536) {
+    try { 
+      throw { json: JSON.parse(file.toString()) } 
+    } catch (e) { 
+      if (e.json) throw e.json;
+    }
+  }
+
+  let opt = { filename };
+  if (quoted) opt.quoted = quoted;
+  if (!type) options.asDocument = true;
+
+  let mtype = '', mimetype = type.mime, convert;
+  
+  if (/webp/.test(type.mime) || (/image/.test(type.mime) && options.asSticker)) 
+    mtype = 'sticker';
+  else if (/image/.test(type.mime) || (/webp/.test(type.mime) && options.asImage)) 
+    mtype = 'image';
+  else if (/video/.test(type.mime)) { 
+    mtype = 'video';
+  } else 
+    mtype = 'document';
+  
+  if (options.asDocument) mtype = 'document';
+
+  let message = {
+    ...options,
+    caption,
+    ptt,
+    [mtype]: { url: pathFile },
+    mimetype
+  };
+
+  let m;
+  try {
+    m = await bot.sendMessage(jid, message, { ...opt, ...options });
+  } catch (e) {
+    console.error(e);
+    m = null;
+  } finally {
+    if (!m) 
+      m = await bot.sendMessage(jid, { ...message, [mtype]: file }, { ...opt, ...options });
+    return m;
+  }
+};
+
+bot.downloadMediaMessage = async (message) => {
+    let mime = (message.msg || message).mimetype || '';
+    let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0];
+
+    const stream = await downloadContentFromMessage(message, messageType);
+    let buffer = Buffer.from([]);
+    
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+
+    const data = Buffer.from(buffer); 
+    buffer.fill(0); 
+    buffer = null;
+
+    return data;
+};
+
+return bot;
+
+};
+
+async function tylor() {
+    if (fs.existsSync(credsPath)) {
+        console.log(color("Session file found, starting bot...", 'yellow'));
+await startBot();
+} else {
+         const sessionDownloaded = await downloadSessionData();
+        if (sessionDownloaded) {
+            console.log("Session downloaded, starting bot.");
+await startBot();
+    } else {
+     if (!fs.existsSync(credsPath)) {
+    if(!global.SESSION_ID) {
+            console.log(color("Please wait for a few seconds to enter your number!", 'red'));
+await startBot();
+        }
+    }
+  }
+ }
+}
+
+tylor()
