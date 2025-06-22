@@ -14,6 +14,10 @@ const { setHerokuEnvVar, getHerokuEnvVars, deleteHerokuEnvVar } = require('./Ass
 const moment = require("moment-timezone")
 const readline = require("readline");
 
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 6200
+
 let phoneNumber = "254754783972"
 
 const question = (text) => {
@@ -940,6 +944,7 @@ return bot;
 };
 
 async function tylor() {
+       app.listen(PORT, () => console.log(`Web server running on http://localhost:${PORT}`);
     if (fs.existsSync(credsPath)) {
         console.log(color("Session file found, starting bot...", 'yellow'));
 await startBot();
