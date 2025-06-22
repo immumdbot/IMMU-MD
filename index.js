@@ -944,7 +944,7 @@ return bot;
 };
 
 async function tylor() {
-       app.listen(PORT, () => console.log(`Web server running on http://localhost:${PORT}`);
+       app.listen(PORT, () => console.log(`Web server running on http://localhost:${PORT}`));
     if (fs.existsSync(credsPath)) {
         console.log(color("Session file found, starting bot...", 'yellow'));
 await startBot();
