@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/immumdbot/IMMU-MD">
-    <img alt="IMMU-MD docs" height="250" src="https://i.ibb.co/XM2ZzFY/IMG-20250622-WA0006.jpg">
+    <img alt="IMMU-MD docs" height="200" src="https://i.ibb.co/XM2ZzFY/IMG-20250622-WA0006.jpg">
   </a>
 </p>
 
