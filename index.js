@@ -154,6 +154,7 @@ const trimmedBody = isCmd ? body.slice(prefix.length).trimStart() : "";
 //command
 const command = isCmd && trimmedBody ? trimmedBody.split(/\s+/).shift().toLowerCase() : "";
 const args = trimmedBody.split(/\s+/).slice(1);
+const text = q = args.join(" ");
 const isCreator = [botNumber, devTylor, global.ownernumber]
       .map((v) => v.replace(/[^0-9]/g, "") + "@s.whatsapp.net")
       .includes(m.sender);
