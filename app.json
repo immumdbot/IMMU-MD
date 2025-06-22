@@ -3,7 +3,7 @@
   "description": "A simple WhatsApp bot!",
   "logo": "https://i.ibb.co/XM2ZzFY/IMG-20250622-WA0006.jpg",
   "keywords": [],
-  "repository": "https://github.com/Dark-Xploit/IMMU-MD",
+  "repository": "https://github.com/immumdbot/IMMU-MD",
   "scripts": {
     "start": "node index.js"
   },
